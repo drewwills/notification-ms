@@ -17,7 +17,7 @@ import uk.ac.ed.notify.NotificationEntry;
 import uk.ac.ed.notify.NotificationError;
 import uk.ac.ed.notify.NotificationResponse;
 import uk.ac.ed.notify.NotificationStubResponse;
-import uk.ac.ed.notify.SecurityConfiguration;
+import uk.ac.ed.notify.config.BasicAuthConfiguration;
 import uk.ac.ed.notify.entity.*;
 import uk.ac.ed.notify.repository.*;
 import uk.ac.ed.notify.service.SubscriptionService;
@@ -38,41 +38,41 @@ public class NotificationController {
     private static final Logger logger = LoggerFactory.getLogger(NotificationController.class);
 
     @Value("${cache.expiry}")
-    int cacheExpiry;
+    private int cacheExpiry;
 
     @Autowired
-    NotificationRepository notificationRepository;
+    private NotificationRepository notificationRepository;
 
     @Autowired
-    PublisherDetailsRepository publisherDetailsRepository;
+    private PublisherDetailsRepository publisherDetailsRepository;
 
     @Autowired
-    SubscriberDetailsRepository subscriberDetailsRepository;
+    private SubscriberDetailsRepository subscriberDetailsRepository;
 
     @Autowired
-    TopicSubscriptionRepository topicSubscriptionRepository;
+    private TopicSubscriptionRepository topicSubscriptionRepository;
 
     @Autowired
-    UserNotificationAuditRepository userNotificationAuditRepository;
+    private UserNotificationAuditRepository userNotificationAuditRepository;
 
     @Autowired
-    NotificationErrorRepository notificationErrorRepository;
+    private NotificationErrorRepository notificationErrorRepository;
 
     @Autowired
-    SubscriptionService subscriptionService;
+    private SubscriptionService subscriptionService;
 
     /*
-     * TODO:  Convert Swagger configuration (@ApiOperation) to use Basic AuthN.
+     * TODO:  update Swagger configuration (@ApiOperation) to support Basic AuthN.
      */
 
     @ApiOperation(value="Get a specific notification",notes="Requires notification id to look up", response = Notification.class,
-    authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.read",description = "Read access to notification API")})})    
+    authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.read",description = "Read access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
     @RequestMapping(value="/notification/{notification-id}",method= RequestMethod.GET)
     public Notification getNotification(@PathVariable("notification-id") String notificationId, HttpServletResponse httpServletResponse, HttpServletRequest httpServletRequest) throws ServletException {
 
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
-        
+
         long expires = (new Date()).getTime()+cacheExpiry;
 
         httpServletResponse.setHeader("cache-control", "public, max-age=" + cacheExpiry/1000 + ", cache");
@@ -99,7 +99,7 @@ public class NotificationController {
     public List<Notification> getPublisherNotifications(@PathVariable("publisher-id") String publisherId, HttpServletResponse httpServletResponse, HttpServletRequest httpServletRequest) throws ServletException {
 
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
-        
+
         long expires = (new Date()).getTime()+cacheExpiry;
 
         httpServletResponse.setHeader("cache-control", "public, max-age=" + cacheExpiry/1000 + ", cache");
@@ -125,15 +125,15 @@ public class NotificationController {
             throw new ServletException("Error getting publisher notifications");
         }
     }
-    
+
     @ApiOperation(value="Get notifications by user",notes="Requires uun to look up", response = Notification.class,responseContainer = "List",
     	    authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.read",description = "Read access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
-    @RequestMapping(value="/notifications/user/{uun}", method= RequestMethod.GET) 
+    @RequestMapping(value="/notifications/user/{uun}", method= RequestMethod.GET)
     public List<Notification> getUserNotifications(@PathVariable("uun") String uun, HttpServletResponse httpServletResponse, HttpServletRequest httpServletRequest) throws ServletException {
 
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
-        
+
     	long expires = (new Date()).getTime()+cacheExpiry;
 
     	httpServletResponse.setHeader("cache-control", "public, max-age=" + cacheExpiry/1000 + ", cache");
@@ -144,16 +144,16 @@ public class NotificationController {
                 {
     			return NotificationStubResponse.getNotificationsList();
                 }
-                
+
                 List<Notification> notifications = notificationRepository.findByUun(uun);
-                
+
                 //WEB010-6 Notification API get user notifications
             for (Notification notification : notifications) {
                 List<NotificationUser> users = new ArrayList<>();
                 notification.setNotificationUsers(users);
             }
-                
-                //WEB010-44 Notifications should first be sorted by due date and then start date 
+
+                //WEB010-44 Notifications should first be sorted by due date and then start date
                 //(if due date is not available or if they have the same due date
     		return getSortedNotification(notifications);
     	}
@@ -162,7 +162,7 @@ public class NotificationController {
     		logger.error("Error retrieving notifications",e);
             throw new ServletException("Error retrieving notifications");
         }
-    	
+
     }
 
    // @MessageMapping("/notification")
@@ -170,7 +170,7 @@ public class NotificationController {
     @ApiOperation(value="Create a new notification",notes="Requires a valid notification object. For creation DO NOT specify notificationId, one will be automatically generated.",response = Notification.class,
             authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.write",description = "Write access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
-    @RequestMapping(value="/notification/", method=RequestMethod.POST) 
+    @RequestMapping(value="/notification/", method=RequestMethod.POST)
     public Notification setNotification(@RequestBody Notification notification, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException {
 
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
@@ -186,11 +186,11 @@ public class NotificationController {
     	if (!notification.getTopic().equals("Emergency") && notification.getNotificationUsers().isEmpty()) {
     		throw new ServletException("Must add users for non broadcast notifications");
     	}
-        		
-        try { 	
-                     
-            notification.setNotificationId(null);        		
-            List<NotificationUser> users = notification.getNotificationUsers();             
+
+        try {
+
+            notification.setNotificationId(null);
+            List<NotificationUser> users = notification.getNotificationUsers();
         	if (!users.isEmpty()) {
                 for (NotificationUser user : users) {
                     user.setNotification(notification);
@@ -198,9 +198,9 @@ public class NotificationController {
                 }
         		notification.setNotificationUsers(users);
         	}
-        		                             
+
             notificationRepository.save(notification);
-        	                                        
+
             UserNotificationAudit userNotificationAudit = new UserNotificationAudit();
             userNotificationAudit.setAction(AuditActions.CREATE_NOTIFICATION);
             userNotificationAudit.setAuditDate(new Date());
@@ -224,20 +224,20 @@ public class NotificationController {
             throw new ServletException("Error saving notification");
         }
     }
-    
+
     @ApiOperation(value="Update notification",notes="Requires a valid notification object",
             authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.write",description = "Write access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
     @RequestMapping(value="/notification/{notification-id}",method=RequestMethod.PUT)
-    public void updateNotification(@PathVariable("notification-id") String notificationId, @RequestBody Notification notification, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException {      
+    public void updateNotification(@PathVariable("notification-id") String notificationId, @RequestBody Notification notification, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException {
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
-        
+
 
         if (!notificationId.equals(notification.getNotificationId()))
         {
             throw new ServletException("Notification ID and notification body do not match");
         }
-        
+
         if (!notification.getTopic().equals("Emergency") && notification.getNotificationUsers().isEmpty())
         {
             throw new ServletException("Non broadcast notifications require at least one user");
@@ -271,7 +271,7 @@ public class NotificationController {
         	}
 
             notificationRepository.save(notification);
-            
+
             UserNotificationAudit userNotificationAudit = new UserNotificationAudit();
             userNotificationAudit.setAction(AuditActions.UPDATE_NOTIFICATION);
             userNotificationAudit.setAuditDate(new Date());
@@ -291,13 +291,13 @@ public class NotificationController {
             throw new ServletException("Error saving notification");
         }
 
-    }   
+    }
 
     @ApiOperation(value="Delete a notification",notes="Requires a valid notification id",
             authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.write",description = "Write access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
     @RequestMapping(value="/notification/{notification-id}",method=RequestMethod.DELETE)
-    public void deleteNotification(@PathVariable("notification-id") String notificationId, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException {     
+    public void deleteNotification(@PathVariable("notification-id") String notificationId, HttpServletRequest httpServletRequest, HttpServletResponse httpServletResponse) throws ServletException {
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
 
 
@@ -305,18 +305,18 @@ public class NotificationController {
         {
             return;
         }
-    	
+
         try
-        {   
+        {
         	Notification notification = notificationRepository.findOne(notificationId);
         	if (notification != null) {
-        	
+
                 //https://www.jira.is.ed.ac.uk/browse/WEB010-9 - Notification Deletion, end date a notification rather than delete it
         	//notificationRepository.delete(notificationId);
-                    
+
                 notification.setEndDate(new Date());
                 notificationRepository.save(notification);
-                
+
                 UserNotificationAudit userNotificationAudit = new UserNotificationAudit();
                 userNotificationAudit.setAction(AuditActions.DELETE_NOTIFICATION);
                 userNotificationAudit.setAuditDate(new Date());
@@ -354,7 +354,7 @@ public class NotificationController {
 
         httpServletResponse.setHeader("cache-control", "public, max-age=" + cacheExpiry/1000 + ", cache");
         httpServletResponse.setDateHeader("Expires", expires);
-    	
+
     	String uun = httpServletRequest.getParameter("user.login.id");
 
         NotificationResponse notificationResponse = new NotificationResponse();
@@ -397,16 +397,16 @@ public class NotificationController {
                     entry = new NotificationEntry();
                     entry.setBody(notification.getBody());
                     entry.setTitle(notification.getTitle());
-                    
+
                     if(notification.getStartDate() == null)
                     {
                         entry.setStartDate(new SimpleDateFormat("yyyy-MM-dd").parse("1970-01-01"));
                     }
                     else
-                    {                        
+                    {
                         entry.setStartDate(notification.getStartDate());
                     }
-                    
+
                     if (notification.getEndDate()==null)
                     {   //if no due date, this means the notification is open ended, however no due date
                         //may cause problem to end system that consumes notifications, i.e. notification portlet
@@ -417,7 +417,7 @@ public class NotificationController {
                     {
                         entry.setDueDate(notification.getEndDate());
                     }
-                    
+
                     entry.setUrl(notification.getUrl());
                     entries.add(entry);
                 }
@@ -454,7 +454,7 @@ public class NotificationController {
     @ApiOperation(value="Get all emergency notifications",notes="Independent of users",response = NotificationResponse.class,
             authorizations = {@Authorization(value="oauth2",scopes = {@AuthorizationScope(scope="notifications.read",description = "Read access to notification API")})})
     @ApiResponses({@ApiResponse(code=404,message="Not found")})
-    @RequestMapping(value="/emergencynotifications",method= RequestMethod.GET)//OAuth2Authentication authentication, 
+    @RequestMapping(value="/emergencynotifications",method= RequestMethod.GET)//OAuth2Authentication authentication,
     public NotificationResponse getEmergencyNotifications(HttpServletResponse httpServletResponse, HttpServletRequest httpServletRequest) {
 
         CorsMatcher.setAccessControlAllowOrigin(httpServletRequest, httpServletResponse, CORS_PATTERN);
@@ -463,7 +463,7 @@ public class NotificationController {
 
         httpServletResponse.setHeader("cache-control", "public, max-age=" + cacheExpiry/1000 + ", cache");
         httpServletResponse.setDateHeader("Expires", expires);
-        
+
         NotificationResponse notificationResponse = new NotificationResponse();
 
         if (isNotificationApiUi())
@@ -471,7 +471,7 @@ public class NotificationController {
             return NotificationStubResponse.getNotificationResponse();
         }
 
-        
+
         try {
 
             Date dateNow = new Date();
@@ -513,8 +513,8 @@ public class NotificationController {
         }
 
         return notificationResponse;
-    } 
-    
+    }
+
     private List<Notification> getSortedNotification(List<Notification> notificationUnsorted){
        List<Notification> notificationsWithEndDate = new ArrayList<>();
        List<Notification> notificationsWithoutEndDate = new ArrayList<>();
@@ -526,33 +526,21 @@ public class NotificationController {
                 notificationsWithoutEndDate.add(aNotificationUnsorted);
             }
         }
-       
-       Collections.sort(notificationsWithEndDate, new java.util.Comparator<Notification>() {
-           @Override
-           public int compare(Notification notification1, Notification notification2)
-           {
-               return  notification1.getEndDate().compareTo(notification2.getEndDate());
-           }
-       });
-       
-       Collections.sort(notificationsWithoutEndDate, new java.util.Comparator<Notification>() {
-           @Override
-           public int compare(Notification notification1, Notification notification2)
-           {
-               return  notification1.getStartDate().compareTo(notification2.getStartDate());
-           }
-       });       
-       
+
+       notificationsWithEndDate.sort(Comparator.comparing(Notification::getEndDate));
+
+       notificationsWithoutEndDate.sort(Comparator.comparing(Notification::getStartDate));
+
        List<Notification> notificationsSorted = new ArrayList<>();
        notificationsSorted.addAll(notificationsWithEndDate);
        notificationsSorted.addAll(notificationsWithoutEndDate);
-       
+
        return notificationsSorted;
     }
-    
+
     private boolean isNotificationApiUi() {
         final Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        return authentication != null && SecurityConfiguration.NOTIFICATION_API_UI.equals(authentication.getPrincipal());
+        return authentication != null && BasicAuthConfiguration.NOTIFICATION_API_UI.equals(authentication.getPrincipal());
     }
 
 }
