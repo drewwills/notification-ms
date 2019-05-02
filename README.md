@@ -13,8 +13,11 @@ You can run the `notification-ms` project locally (for development) or in a serv
 Use the following command to run `notification-ms` locally with the Spring Boot Maven Plugin:
 
 ```
-$ mvn spring-boot:run
+$ mvn [-Drun.jvmArguments="-Duk.ac.ed.notify.security.basicAuthPassword=CHANGEME"] [clean] spring-boot:run
 ```
+
+**NOTE:** Use `-Duk.ac.ed.notify.security.basicAuthPassword=CHANGEME` to specify a password for HTTP
+BASIC AuthN (which turns the feature on).
 
 [Spring Boot Maven Plugin documentation][]
 
